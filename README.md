@@ -42,7 +42,7 @@ A terminal workspace that hosts multiple AI agents (Claude Code, Hermes, ...) in
 ## Install
 
 ```bash
-pipx install git+https://github.com/<your-username>/tokview.git
+pipx install git+https://github.com/JDkim-glitch/tokview.git
 ```
 
 This creates an isolated venv under `~/.local/pipx/venvs/tokview/` and exposes the `tokview` command on your PATH (same shape as `claude` is installed).
