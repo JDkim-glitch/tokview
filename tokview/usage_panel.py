@@ -71,6 +71,8 @@ class UsagePanel(Vertical):
             text.append("⚠ ", style="yellow")
             text.append(snap.error + "\n", style="red")
         else:
+            self._render_model(text, snap)
+            self._render_session(text, snap)
             self._render_block(text, snap)
             self._render_today(text, snap)
             self._render_week(text, snap)
@@ -79,6 +81,56 @@ class UsagePanel(Vertical):
         if snap.last_polled:
             text.append(f"\n⟳ {snap.last_polled}", style="dim")
         return text
+
+    def _render_model(self, text: Text, snap: UsageSnapshot) -> None:
+        if not snap.model and not snap.provider:
+            return
+        text.append("Model\n", style="bold")
+        if snap.model:
+            text.append(f"{snap.model}\n", style="cyan")
+        if snap.provider:
+            text.append(f"via {snap.provider}\n", style="dim")
+        # If multiple distinct models were used today, surface that fact.
+        extras = [m for m in snap.models_today if m != snap.model]
+        if extras:
+            unique_extras = list(dict.fromkeys(extras))
+            text.append("Also today: ", style="dim")
+            text.append(", ".join(unique_extras) + "\n", style="dim")
+        text.append("\n")
+
+    def _render_session(self, text: Text, snap: UsageSnapshot) -> None:
+        # Currently only hermes populates session_* fields (via state.db).
+        if snap.session_messages == 0 and snap.session_input == 0:
+            return
+        header = "Session"
+        if snap.session_started_at:
+            header += f" · since {snap.session_started_at}"
+        text.append(header + "\n", style="bold")
+        if snap.session_title:
+            short = snap.session_title
+            if len(short) > 22:
+                short = short[:21] + "…"
+            text.append(f"{short}\n", style="dim")
+        text.append("In:    ")
+        text.append(f"{snap.session_input:,}\n", style="blue")
+        text.append("Out:   ")
+        text.append(f"{snap.session_output:,}\n", style="green")
+        if snap.session_cache_read:
+            text.append("Cache: ")
+            text.append(f"{snap.session_cache_read:,}\n", style="magenta")
+        if snap.session_reasoning:
+            text.append("Think: ")
+            text.append(f"{snap.session_reasoning:,}\n", style="yellow")
+        if snap.session_messages:
+            text.append("Msgs:  ")
+            text.append(f"{snap.session_messages:,}\n", style="cyan")
+        if snap.session_api_calls:
+            text.append("Calls: ")
+            text.append(f"{snap.session_api_calls:,}\n", style="cyan")
+        if snap.session_cost > 0:
+            text.append("Cost:  ")
+            text.append(f"${snap.session_cost:.4f}\n", style="green")
+        text.append("\n")
 
     def _render_block(self, text: Text, snap: UsageSnapshot) -> None:
         if snap.block_end is None:
@@ -116,13 +168,28 @@ class UsagePanel(Vertical):
     def _render_today(self, text: Text, snap: UsageSnapshot) -> None:
         if snap.today_date is None:
             return
-        text.append(f"Today {snap.today_date[5:]}\n", style="bold")
+        header = f"Today {snap.today_date[5:]}"
+        if snap.daily_remaining_min is not None:
+            header += f" · {_fmt_remaining(snap.daily_remaining_min)} left"
+        text.append(header + "\n", style="bold")
         text.append("In:    ")
         text.append(f"{snap.today_input:,}\n", style="blue")
         text.append("Out:   ")
         text.append(f"{snap.today_output:,}\n", style="green")
+        if snap.today_cache_read:
+            text.append("Cache: ")
+            text.append(f"{snap.today_cache_read:,}\n", style="magenta")
+        if snap.today_messages:
+            text.append("Msgs:  ")
+            text.append(f"{snap.today_messages:,}\n", style="cyan")
         text.append("Cost:  ")
-        text.append(f"${snap.today_cost:.2f}\n", style="green")
+        # Free-tier costs often print as 0.00 at 2dp — show 4dp when nonzero.
+        if 0 < snap.today_cost < 0.01:
+            text.append(f"${snap.today_cost:.4f}\n", style="green")
+        else:
+            text.append(f"${snap.today_cost:.2f}\n", style="green")
+        if snap.daily_remaining_min is not None:
+            text.append("Resets 00:00\n", style="dim")
         text.append("\n")
 
     def _render_week(self, text: Text, snap: UsageSnapshot) -> None:

@@ -21,7 +21,6 @@ from tokview.new_session_screen import NewSessionScreen
 from tokview.pty_terminal import PtyTerminalWidget
 from tokview.session import SessionManager
 from tokview.sidebar import Sidebar, SessionListItem
-from tokview.status_bar import StatusBar
 from tokview.usage_panel import UsagePanel
 from tokview.usage_poller import UsagePoller, UsageSnapshot
 
@@ -48,6 +47,7 @@ class EmptyState(Static):
 
 class TokviewApp(App):
     CSS_PATH = Path(__file__).resolve().parent / "tokview.tcss"
+    TITLE = "tokview"
     BINDINGS = [
         ("f2", "new_session", "New (F2)"),
         ("f3", "close_session", "Close (F3)"),
@@ -76,7 +76,6 @@ class TokviewApp(App):
             with Container(id="terminal-host"):
                 yield EmptyState(id="empty-state")
             yield UsagePanel()
-        yield StatusBar()
 
     def on_mount(self) -> None:
         self._poller = UsagePoller(
@@ -85,6 +84,7 @@ class TokviewApp(App):
             interval=5.0,
         )
         self._poller.start()
+        self.call_after_refresh(self.action_new_session)
 
     def _on_usage_update(self, snap: UsageSnapshot) -> None:
         # Remember the most recent raw snapshot so F7 can capture a baseline.
@@ -154,6 +154,18 @@ class TokviewApp(App):
             return
         self._manager.mark_exited(sid)
         self._refresh_sidebar()
+
+    def on_pty_terminal_widget_activity(
+        self, event: PtyTerminalWidget.Activity
+    ) -> None:
+        # Poke the poller so usage refreshes the moment the user submits a
+        # prompt or the agent finishes a burst, instead of waiting up to the
+        # 5s tick. Only fire for the active session — background sessions
+        # don't need to interrupt the panel that's not showing them.
+        if event.session_id != self._manager.active_id:
+            return
+        if self._poller is not None:
+            self._poller.poke()
 
     def _hide_empty_state(self) -> None:
         try:
